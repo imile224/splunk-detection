@@ -1,0 +1,20 @@
+name: "Tactics - Cross-Platform Persistence and Account Creation"
+severity: "High"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Sistemdə hücumçuların kalıcılaşma (persistence) təmin etmək və ya yeni istifadəçi yaradaraq imtiyaz yüksəltmək cəhdləri aşkarlandı. Alert daxilində Scheduled Tasks, Services, Registry açarları və ya Linux Profile/SSH dəyişiklikləri kateqoriyalara uyğun təyin edilmişdir."
+search: |
+  index=*
+  | eval payload = lower(coalesce(CommandLine, process, TargetObject, TargetFilename, file_path, MESSAGE, _raw))
+  | rex field=payload "(?<keyword>schtasks|sc\.exe|crontab|systemctl|currentversion\\\\run|\\\\startup|\.ssh\/authorized_keys|\.(bashrc|profile)|net\s+(user|localgroup)|useradd|usermod)"
+  | where isnotnull(keyword) OR EventCode IN (4698, 7045, 11, 12, 13, 14, 4720)
+  | eval persistence_type = case(
+      match(payload, "schtasks|crontab") OR EventCode==4698, "Task / Cron Jobs",
+      match(payload, "sc\.exe|systemctl") OR EventCode==7045, "Service / Systemd",
+      match(payload, "run|startup") OR EventCode IN (11,12,13,14), "Registry / Startup Folder",
+      match(payload, "net\s+user|useradd|usermod") OR EventCode==4720, "Account Creation / Escalation",
+      match(payload, "\.ssh|\.bashrc|\.profile"), "SSH / Profile Mod",
+      1=1, "Other Persistence Attempt"
+    )
+  | stats count min(_time) as first_seen max(_time) as last_seen values(payload) as detected_payloads by host, persistence_type
+  | sort - count
