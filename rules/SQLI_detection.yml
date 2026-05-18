@@ -1,0 +1,12 @@
+name: "Web - Advanced SQL Injection (SQLi) Detection"
+severity: "High"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Veb server loqlarında müxtəlif verilənlər bazası (MySQL, MSSQL, Oracle, PostgreSQL) hədəfli Union-based, Error-based və Blind SQLi vektorları (sleep, waitfor, information_schema və s.) aşkarlandı."
+search: |
+  index=idx_web
+  | rex field=_raw "^(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+-\s+-\s+\[(?<req_time>[^\]]+)\]\s+\"(?<http_method>\w+)\s+(?<request_uri>\S+)\s+HTTP\/[^\"]+\"\s+(?<status_code>\d+)\s+(?<bytes_sent>\d+)\s+\"(?<http_referer>[^\"]+)\"\s+\"(?<user_agent>[^\"]+)\""
+  | eval decoded_payload = lower(urldecode(_raw))
+  | rex field=decoded_payload max_match=0 "(?<sqli_pattern>--|#|/\|\/|union\s+(all\s+)?select|select\s+.\s+from|substr(ing)?\s\(|mid\s*\(|left\s*\(|right\s*\(|concat\s*\(|'\|\|'|\+'|'\s+'|@@version|version\s*\(|v\$version|from\s+v\$instance|select\s+banner\s+from|information_schema|all_tables|user_tables|pg_catalog|sys\.tables|sys\.columns|case\s+when\s+.\s+then|select\s+if\s\(|to_char\(1/0\)|cast\(.\s+as\s+int\)/0|waitfor\s+delay\s+'|pg_sleep\s\(|sleep\s*\(|dbms_lock\.sleep\s*\(|utl_inaddr\.get_host_address|xp_dirtree|sys\.fn_xe_file_target_read_file|load_file\s*\()"
+  | where isnotnull(sqli_pattern)
+  | stats count min(_time) as first_seen max(_time) as last_seen values(sqli_pattern) as detected_vectors values(request_uri) as target_uris values(http_referer) as referer_headers by client_ip, status_code
