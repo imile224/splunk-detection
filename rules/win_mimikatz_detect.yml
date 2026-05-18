@@ -1,0 +1,9 @@
+name: "Windows - Mimikatz LSASS Dump Detection"
+severity: "Critical"
+cron: "*/2 * * * *"
+telegram_alert: true
+description: "Mimikatz və ya oxşar alətlərlə LSASS yaddaşının oxunması cəhdi aşkarlandı (EventID=10)."
+search: |
+  index=windows sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=10 
+  TargetImage="C:\\Windows\\system32\\lsass.exe" 
+  GrantedAccess="0x1410" OR GrantedAccess="0x1010"
