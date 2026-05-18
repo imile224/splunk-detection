@@ -1,0 +1,13 @@
+name: "Endpoint - Possible Ransomware Activity or VBS Script Mass File Creation"
+severity: "Critical"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Sistemdə qısa müddət ərzində tək bir proses tərəfindən 15-dən çox faylın yaradıldığı və ya şifrələndiyi (Sysmon EventID=11) aşkarlandı. Bu, fidyə proqramlarının (Ransomware) kütləvi şifrələmə fəaliyyətini göstərə bilər."
+search: |
+  index=* sourcetype="*sysmon*" "<EventID>11</EventID>" ".vbs"
+  | rex field=_raw "Name=.Image.>(?<Attacker_Process>[^<]+)"
+  | rex field=_raw "Name=.TargetFilename.>(?<Target_File>[^<]+)"
+  | rex field=Target_File "(?<file_extension>\.[^\.]+)$"
+  | stats min(_time) as First_Seen max(_time) as Last_Seen dc(Target_File) as Encrypted_File_Count values(file_extension) as Extensions by host, Attacker_Process
+  | where Encrypted_File_Count >= 15
+  | convert ctime(First_Seen) ctime(Last_Seen)
