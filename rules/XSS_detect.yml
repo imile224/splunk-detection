@@ -1,0 +1,11 @@
+name: "Web - Cross-Site Scripting (XSS) Attempts"
+severity: "High"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Veb server loqlarında şübhəli HTML teqləri (script, iframe, svg), zərərli JavaScript funksiyaları (alert, prompt, eval) və ya event handler-lər (onerror, onload) aşkarlandı. Bu, tətbiqə qarşı Cross-Site Scripting (XSS) cəhdini göstərir."
+search: |
+  index=idx_web
+  | eval decoded_payload = lower(urldecode(_raw))
+  | rex field=decoded_payload max_match=0 "(?<xss_pattern>(?:<|%3c)\s*(?:script|iframe|img|svg|body|html|style|base|object|embed|applet)|javascript:|vbscript:|data:text\/html|onload\s*=|onerror\s*=|onmouseover\s*=|onfocus\s*=|prompt\s*\(|confirm\s*\(|alert\s*\(|eval\s*\(|document\.cookie|document\.write|window\.location)"
+  | where isnotnull(xss_pattern)
+  | table _time, xss_pattern, decoded_payload
