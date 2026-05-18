@@ -1,0 +1,15 @@
+name: "Web - Horizontal IDOR and Data Scraping Detection"
+severity: "High"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Tək bir IP-dən qısa zaman kəsiyində 15-dən çox fərqli ID-yə (user_id, invoice, profile və s.) uğurlu (200 OK) müraciət aşkarlandı. Bu, Horizontal IDOR və ya məlumatların skrapinq edilməsi cəhdini göstərir."
+search: |
+  index=idx_web
+  | rex field=_raw "^(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+-\s+-\s+\[(?<req_time>[^\]]+)\]\s+\"(?<http_method>\w+)\s+(?<request_uri>\S+)\s+HTTP\/[^\"]+\"\s+(?<status_code>\d+)\s+(?<bytes_sent>\d+)\s+\"(?<http_referer>[^\"]+)\"\s+\"(?<user_agent>[^\"]+)\""
+  | eval decoded_uri = lower(urldecode(request_uri))
+  | rex field=decoded_uri "(?<id_param>(id|user_id|account|invoice|doc|profile|file|uid|customer|order)[=/](?<extracted_id>\d+))"
+  | where isnotnull(extracted_id) AND status_code=200
+  | stats count min(_time) as first_seen max(_time) as last_seen dc(extracted_id) as distinct_ids_accessed values(extracted_id) as accessed_id_samples values(decoded_uri) as sample_uris by client_ip
+  | where distinct_ids_accessed > 15
+  | eval severity=case(distinct_ids_accessed > 50, "Critical - Automated IDOR / Data Scraping", distinct_ids_accessed > 15, "High - Horizontal IDOR Attempt")
+  | table first_seen last_seen client_ip distinct_ids_accessed accessed_id_samples severity count
