@@ -1,0 +1,64 @@
+name: Splunk Detection as Code Deployer
+
+on:
+  push:
+    paths:
+      - 'rules/**'
+
+jobs:
+  deploy_to_splunk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install yq (YAML Parser)
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Parse and Deploy Rules to Splunk
+        run: |
+          for file in rules/*.yml; do
+            [ -e "$file" ] || continue
+            echo "Processing file: $file"
+            
+            # YAML faylından dataları oxuyuruq
+            rule_name=$(yq eval '.name' "$file")
+            search_query=$(yq eval '.search' "$file")
+            cron_sched=$(yq eval '.cron' "$file")
+            severity=$(yq eval '.severity' "$file")
+            desc=$(yq eval '.description' "$file")
+            tg_enabled=$(yq eval '.telegram_alert' "$file")
+
+            echo "Deploying to Splunk: $rule_name"
+
+            # Əsas API sorğusu parametrləri
+            ARGS=(
+              -k -X POST "https://${{ secrets.SPLUNK_HOST }}:8089/services/saved/searches"
+              -H "Authorization: Bearer ${{ secrets.SPLUNK_TOKEN }}"
+              -H "Content-Type: application/x-www-form-urlencoded"
+              --data-urlencode "name=$rule_name"
+              --data-urlencode "search=$search_query"
+              -d "alert_type=number of events"
+              -d "alert_comparator=greater than"
+              -d "alert_threshold=0"
+              -d "is_scheduled=1"
+              -d "cron_schedule=$cron_sched"
+              -d "is_visible=1"
+              -d "output_mode=json"
+            )
+
+            # Əgər Telegram aktiv edilibsə, əlavə parametrləri push edirik
+            if [ "$tg_enabled" == "true" ]; then
+              ARGS+=(
+                -d "action.telegram=1"
+                -d "action.telegram.param.bot_token=${{ secrets.TELEGRAM_BOT_TOKEN }}"
+                -d "action.telegram.param.chat_id=${{ secrets.TELEGRAM_CHAT_ID }}"
+                --data-urlencode "action.telegram.param.message=🚨 *SOC Alert [$severity]:* %name% tətikləndi! %0A📌 *Açıqlama:* $desc"
+              )
+            fi
+
+            # Splunk-a göndərilmə
+            curl "${ARGS[@]}"
+          done
