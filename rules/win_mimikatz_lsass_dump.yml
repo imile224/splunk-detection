@@ -1,0 +1,11 @@
+name: "Windows - Mimikatz or LSASS Memory Dump Detection"
+severity: "Critical"
+cron: "*/3 * * * *"
+telegram_alert: true
+description: "Sistemdə Mimikatz alətinin izləri, kerberos biletləri (.kirbi) və ya LSASS yaddaş prosesinə qarşı şübhəli müraciətlər/fayl yaratma cəhdləri aşkarlandı. Bu, adətən istifadəçi şifrələrini və ya NTLM heşlərini oğurlamaq (credential dumping) məqsədilə edilir."
+search: |
+  index=* "mimikatz" OR "chocolate.kirbi" OR "lsass"
+  | eval src_proc = lower(coalesce(SourceImage, ProcessName, Image, ParentProcessName, ""))
+  | eval tgt_file_or_proc = lower(coalesce(TargetImage, TargetFilename, ObjectName, ""))
+  | eval cmd_line = lower(coalesce(CommandLine, _raw))
+  | stats count min(_time) as first_seen max(_time) as last_seen values(cmd_line) as command_details values(EventCode) as event_codes by host, src_proc, tgt_file_or_proc
