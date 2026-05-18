@@ -1,0 +1,13 @@
+name: "Endpoint - Microsoft Word Launching PowerShell via Macro"
+severity: "Critical"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Microsoft Word (WINWORD.EXE) prosesinin alt qolu olaraq PowerShell başlatdığı aşkarlandı (Sysmon EventID=1). Bu fəaliyyət adətən fişinq (phishing) sənədlərindəki zərərli makroların icrası zamanı baş verir."
+search: |
+  index=* sourcetype="*sysmon*" "<EventID>1</EventID>" "WINWORD.EXE" "powershell.exe"
+  | rex field=_raw "Name=.ParentImage.>(?<Office_App>[^<]+)"
+  | rex field=_raw "Name=.Image.>(?<Malicious_Child_Process>[^<]+)"
+  | rex field=_raw "Name=.CommandLine.>(?<Executed_Payload>[^<]+)"
+  | search Office_App="*WINWORD.EXE*" Malicious_Child_Process="*powershell.exe*"
+  | stats count min(_time) as Time values(Executed_Payload) as Zererli_Kod by host, Office_App, Malicious_Child_Process
+  | convert ctime(Time)
