@@ -1,0 +1,9 @@
+name: "Linux - SSH Brute Force Attempt"
+severity: "High"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Ardıcıl 5-dən çox uğursuz giriş cəhdi göstərən IP ünvanı qeydə alındı."
+search: |
+  index=linux sourcetype=secure "Failed password" 
+  | stats count by src_ip 
+  | where count > 5
