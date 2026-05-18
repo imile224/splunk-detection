@@ -1,0 +1,11 @@
+name: "Web - Command Injection and RCE Attempts"
+severity: "Critical"
+cron: "*/5 * * * *"
+telegram_alert: true
+description: "Veb server loqlarında şübhəli sistem əmrlərinin (cat, whoami, ping, curl və s.) və ya əmr birləşdirici operatorların (; , |, &&) istifadəsi aşkarlandı. Bu, uzaqdan kod icrası (RCE) cəhdini göstərir."
+search: |
+  index=idx_web "cat" OR "whoami" OR "id" OR "uname" OR "ping" OR "curl" OR "wget" OR "nc" OR "bash" OR "powershell" OR "cmd" OR "%3B" OR "%26" OR "%7C" OR "%60"
+  | eval decoded_payload = lower(urldecode(_raw))
+  | rex field=decoded_payload max_match=0 "(?<cmd_pattern>[;`]|\|\||\&\&|cat\s+\/etc\/(?:passwd|shadow|hosts|issue)|whoami\b|id\b|uname\s+-a|ping\s+-(?:c|n)|curl\s+https?:|wget\s+https?:|nc\s+-|bash\s+-i|sh\s+-i|powershell(?:\.exe)?|cmd\.exe|ipconfig|net\s+user|nslookup|traceroute|tracert|\/bin\/(?:bash|sh|nc|zsh)|\/usr\/bin\/(?:id|whoami|python|perl))"
+  | where isnotnull(cmd_pattern)
+  | table _time, cmd_pattern, decoded_payload
